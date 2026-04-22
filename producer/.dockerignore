@@ -1,0 +1,29 @@
+# Caches & bytecode
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Version control
+.git/
+.gitignore
+
+# Secrets (injected at runtime via env vars)
+.env
+.env.*
+
+# Test suite (not needed in production image)
+tests/
+
+# Docs & design (never shipped)
+document/
+architecture/
+*.md
+
+# Buffer files (runtime artifact, not build-time)
+buffer/
+*.jsonl
+
+# OS junk
+.DS_Store
+Thumbs.db
