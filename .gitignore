@@ -1,1 +1,72 @@
+# ===== Secrets & Credentials =====
+.env
+.env.*
+!.env.example
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+
+# ===== Virtual Environments =====
+venv/
+.venv/
+env/
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== Testing =====
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== Temp Files =====
+tmp/
+*.tmp
+
+# ===== Data & Artifacts =====
+*.csv
+*.parquet
+*.jsonl
+*.bin
+*.pt
+
+# ===== Pipeline State & Local Storage =====
+flink-checkpoints/
+flink-savepoints/
+kafka-logs/
+airflow-logs/
+ge_data_docs/
+weaviate-data/
+
+# ===== Docker =====
+docker-compose.override.yml
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Project-specific generated =====
+reports/
+
 /architecture
+/document
+/Newslens_README.md

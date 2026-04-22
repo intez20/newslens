@@ -1,0 +1,5 @@
+# Ingestion — Embedding + Weaviate vector upsert
+weaviate-client==4.5.4
+sentence-transformers==2.7.0
+pydantic==2.6.1
+python-dotenv==1.0.1

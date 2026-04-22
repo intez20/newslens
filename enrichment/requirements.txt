@@ -1,0 +1,7 @@
+# Enrichment — LangChain LLM worker (summary, entities, sentiment, domain tag)
+langchain==0.2.16
+langchain-community==0.2.16
+langchain-core==0.2.38
+kafka-python==2.0.2
+pydantic==2.6.1
+python-dotenv==1.0.1
