@@ -48,6 +48,7 @@ tmp/
 *.jsonl
 *.bin
 *.pt
+*.txt
 
 # ===== Pipeline State & Local Storage =====
 flink-checkpoints/
