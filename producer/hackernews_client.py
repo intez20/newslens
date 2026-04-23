@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import requests
 
 from producer.base_client import BaseNewsClient
+from producer.body_fetcher import fetch_body
 from producer.models import ArticleEvent
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ class HackerNewsClient(BaseNewsClient):
         for sid in unique_ids:
             event = self._fetch_item(sid)
             if event:
+                event = self._enrich_body(event)
                 articles.append(event)
 
         logger.info("HackerNews: fetched %d articles", len(articles))
@@ -95,6 +97,13 @@ class HackerNewsClient(BaseNewsClient):
         except Exception as exc:
             logger.warning("Skipping HN item %d: %s", item_id, exc)
             return None
+
+    def _enrich_body(self, event: ArticleEvent) -> ArticleEvent:
+        """Attempt to fetch the full article body from the story URL."""
+        full_body = fetch_body(str(event.source_url))
+        if full_body:
+            return event.model_copy(update={"body": full_body})
+        return event
 
     @staticmethod
     def _classify_section(title: str) -> str:
