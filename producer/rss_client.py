@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import feedparser
 
 from producer.base_client import BaseNewsClient
+from producer.body_fetcher import fetch_body
 from producer.models import ArticleEvent
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,12 @@ class RSSClient(BaseNewsClient):
                     published_at=pub_dt,
                     source_url=link,
                 )
+
+                # Attempt to fetch full article body from source URL
+                full_body = fetch_body(link)
+                if full_body:
+                    event = event.model_copy(update={"body": full_body})
+
                 events.append(event)
             except Exception as exc:
                 logger.warning("Skipping RSS entry: %s", exc)
