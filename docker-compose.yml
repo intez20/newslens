@@ -1,0 +1,105 @@
+# ===================================================================
+# NewsLens — Docker Compose (KRaft Kafka + Kafka UI + Producer)
+# ===================================================================
+# Usage:
+#   docker compose up -d             # start all services
+#   docker compose logs -f producer  # watch producer logs
+#   docker compose down              # stop everything
+# ===================================================================
+
+services:
+  # ---------- Kafka Broker (KRaft mode — no Zookeeper) ----------
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: newslens-kafka
+    hostname: kafka
+    ports:
+      - "29092:29092"      # host access for local dev/testing
+    environment:
+      # KRaft mode — single combined broker + controller
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+      # Listeners: internal (9092), controller (9093), host (29092)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # Single-broker replication
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # Topics are created explicitly via kafka-init — no auto-create
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+
+      # Default log retention (overridden per-topic in kafka-init)
+      KAFKA_LOG_RETENTION_HOURS: 24
+    healthcheck:
+      test: kafka-topics --bootstrap-server localhost:9092 --list
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - newslens-net
+
+  # ---------- Topic Initialisation (runs once, then exits) ----------
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: newslens-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo '=== Creating Kafka topics ==='
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic raw-news --partitions 3 --replication-factor 1 --config retention.ms=86400000
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic tech-news --partitions 1 --replication-factor 1 --config retention.ms=172800000
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic finance-news --partitions 1 --replication-factor 1 --config retention.ms=172800000
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic world-news --partitions 1 --replication-factor 1 --config retention.ms=172800000
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic news-failed --partitions 1 --replication-factor 1 --config retention.ms=604800000
+        echo ''
+        echo '=== Topics created ==='
+        kafka-topics --bootstrap-server kafka:9092 --list
+    networks:
+      - newslens-net
+
+  # ---------- Kafka UI (topic inspector on localhost:8080) ----------
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: newslens-kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: newslens
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - newslens-net
+
+  # ---------- Producer Service ----------
+  producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: newslens-producer
+    env_file: .env
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    restart: on-failure
+    networks:
+      - newslens-net
+
+networks:
+  newslens-net:
+    driver: bridge
+    name: newslens-net
