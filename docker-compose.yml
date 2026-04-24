@@ -1,5 +1,6 @@
 # ===================================================================
-# NewsLens — Docker Compose (KRaft Kafka + Kafka UI + Producer)
+# NewsLens — Docker Compose
+# (KRaft Kafka + Kafka UI + Producer + Flink Processor)
 # ===================================================================
 # Usage:
 #   docker compose up -d             # start all services
@@ -96,6 +97,47 @@ services:
       kafka-init:
         condition: service_completed_successfully
     restart: on-failure
+    networks:
+      - newslens-net
+
+  # ---------- Flink JobManager (cluster coordinator + Web UI) ----------
+  flink-jobmanager:
+    build:
+      context: ./processor
+      dockerfile: Dockerfile
+    container_name: newslens-flink-jobmanager
+    hostname: flink-jobmanager
+    ports:
+      - "8081:8081"        # Flink Web UI
+    command: jobmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+        execution.checkpointing.interval: 60000
+        execution.checkpointing.mode: EXACTLY_ONCE
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - newslens-net
+
+  # ---------- Flink TaskManager (executes the stream job) ----------
+  flink-taskmanager:
+    build:
+      context: ./processor
+      dockerfile: Dockerfile
+    container_name: newslens-flink-taskmanager
+    command: taskmanager
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 1
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///tmp/flink-checkpoints
+    depends_on:
+      - flink-jobmanager
     networks:
       - newslens-net
 
