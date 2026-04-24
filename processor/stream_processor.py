@@ -13,7 +13,7 @@ or:
 import json
 import logging
 
-from pyflink.common import WatermarkStrategy
+from pyflink.common import Types, WatermarkStrategy
 from pyflink.common.serialization import SimpleStringSchema
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.datastream.connectors.kafka import (
@@ -54,9 +54,7 @@ def _build_kafka_sink(config: ProcessorConfig, topic: str) -> KafkaSink:
             .set_value_serialization_schema(SimpleStringSchema())
             .build()
         )
-        .set_delivery_guarantee(DeliveryGuarantee.EXACTLY_ONCE)
-        .set_property("transaction.timeout.ms", "900000")
-        .set_transactional_id_prefix(f"newslens-flink-{topic}")
+        .set_delivery_guarantee(DeliveryGuarantee.AT_LEAST_ONCE)
         .build()
     )
 
@@ -91,10 +89,11 @@ def build_job(env: StreamExecutionEnvironment, config: ProcessorConfig) -> None:
         lambda e: route_section(e["section"]) == "world-news"
     )
 
-    # Serialize dict → JSON string, then sink to Kafka
-    tech.map(json.dumps).sink_to(_build_kafka_sink(config, config.topic_tech))
-    finance.map(json.dumps).sink_to(_build_kafka_sink(config, config.topic_finance))
-    world.map(json.dumps).sink_to(_build_kafka_sink(config, config.topic_world))
+    # Serialize dict → JSON string (output_type tells PyFlink to convert
+    # the pickled Python str back to a Java String for the Kafka sink).
+    tech.map(json.dumps, output_type=Types.STRING()).sink_to(_build_kafka_sink(config, config.topic_tech))
+    finance.map(json.dumps, output_type=Types.STRING()).sink_to(_build_kafka_sink(config, config.topic_finance))
+    world.map(json.dumps, output_type=Types.STRING()).sink_to(_build_kafka_sink(config, config.topic_world))
 
 
 def main() -> None:
