@@ -1,6 +1,6 @@
 # ===================================================================
 # NewsLens — Docker Compose
-# (KRaft Kafka + Kafka UI + Producer + Flink Processor)
+# (KRaft Kafka + Kafka UI + Producer + Flink + Ollama + Enrichment)
 # ===================================================================
 # Usage:
 #   docker compose up -d             # start all services
@@ -141,7 +141,44 @@ services:
     networks:
       - newslens-net
 
+  # ---------- Ollama — Local LLM Server (Mistral 7B on CPU) ----------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: newslens-ollama
+    hostname: ollama
+    ports:
+      - "11434:11434"        # host access for local testing
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - newslens-net
+
+  # ---------- Enrichment Worker (LangChain LLM consumer) ----------
+  enrichment-worker:
+    build:
+      context: ./enrichment
+      dockerfile: Dockerfile
+    container_name: newslens-enrichment-worker
+    env_file: .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - newslens-net
+
 networks:
   newslens-net:
     driver: bridge
     name: newslens-net
+
+volumes:
+  ollama-data:
