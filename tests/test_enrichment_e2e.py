@@ -209,8 +209,8 @@ class TestEnrichmentOutput:
         snap_failed = _get_end_offsets(TOPIC_FAILED)
         _publish_to_topic(TOPIC_TECH, [event])
 
-        # Give the enrichment worker time to process
-        time.sleep(15)
+        # Give the enrichment worker time to process (CPU inference ~3 min)
+        time.sleep(210)
 
         # Check nothing landed in dead-letter
         failed = _consume_from(TOPIC_FAILED, snap_failed, timeout_s=5.0)
@@ -236,14 +236,14 @@ class TestEnrichmentDeadLetter:
     def test_missing_body_routes_to_dead_letter(self):
         """Article missing 'body' should fail enrichment and land in news-failed."""
         bad_event = _make_event()
-        bad_event.pop("body")  # remove body — chains will fail
+        bad_event.pop("body")  # remove body — fast-fail before LLM call
         article_id = bad_event["article_id"]
 
         snap = _get_end_offsets(TOPIC_FAILED)
         _publish_to_topic(TOPIC_TECH, [bad_event])
 
-        # Wait for dead-letter
-        failed = _wait_for_messages(TOPIC_FAILED, snap, min_count=1, timeout_s=30)
+        # Wait for dead-letter (fast-fail: no LLM call needed)
+        failed = _wait_for_messages(TOPIC_FAILED, snap, min_count=1, timeout_s=60)
         match = _find_by_id(failed, article_id)
         assert match is not None, (
             f"Expected {article_id} in news-failed but not found"

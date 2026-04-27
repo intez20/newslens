@@ -74,17 +74,41 @@ class EnrichmentWorker:
             dict matching EnrichedArticleEvent schema.
 
         Raises:
-            Exception: On LLM failure, JSON parse error, or validation error.
+            Exception: On missing required fields, LLM failure, or validation error.
         """
+        # Fail fast on missing required fields (before expensive LLM call)
+        for field in ("article_id", "headline", "body"):
+            if field not in raw or not raw[field]:
+                raise ValueError(f"missing required field: {field}")
+
         context = self._build_context(raw)
         result = self.chains.enrich(context)
 
-        # Merge enrichment into original event
-        raw["summary"] = result["summary"]
-        raw["entities"] = result["entities"]
-        raw["sentiment"] = result["sentiment"]["sentiment"]
-        raw["sentiment_reason"] = result["sentiment"]["reason"]
-        raw["domain_tag"] = result["domain_tag"]
+        # Defensive coercion of LLM output
+        summary = str(result.get("summary", "")).strip()
+        if len(summary) > 500:
+            summary = summary[:497] + "..."
+
+        entities_raw = result.get("entities", [])
+        if not isinstance(entities_raw, list):
+            entities_raw = []
+        entities = [str(e).strip() for e in entities_raw if e][:5]
+
+        sentiment_data = result.get("sentiment", {})
+        if isinstance(sentiment_data, dict):
+            sentiment = str(sentiment_data.get("sentiment", "Neutral")).strip()
+            reason = str(sentiment_data.get("reason", "")).strip()
+        else:
+            sentiment = "Neutral"
+            reason = ""
+
+        domain_tag = str(result.get("domain_tag", "Other")).strip()
+
+        raw["summary"] = summary
+        raw["entities"] = entities
+        raw["sentiment"] = sentiment
+        raw["sentiment_reason"] = reason
+        raw["domain_tag"] = domain_tag
         raw["enriched_at"] = datetime.now(timezone.utc).isoformat()
 
         # Validate via Pydantic — raises ValidationError on bad data
