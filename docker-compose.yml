@@ -1,7 +1,7 @@
 # ===================================================================
 # NewsLens — Docker Compose
 # (KRaft Kafka + Kafka UI + Producer + Flink + Ollama + Enrichment
-#  + Quality Gate + Weaviate)
+#  + Quality Gate + Weaviate + Weaviate Ingestion)
 # ===================================================================
 # Usage:
 #   docker compose up -d             # start all services
@@ -216,6 +216,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    networks:
+      - newslens-net
+
+  # ---------- Weaviate Ingestion Worker (Kafka → Weaviate upsert) ----------
+  weaviate-ingestion:
+    build:
+      context: ./weaviate_store
+      dockerfile: Dockerfile
+    container_name: newslens-weaviate-ingestion
+    env_file: .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+    restart: on-failure
     networks:
       - newslens-net
 
