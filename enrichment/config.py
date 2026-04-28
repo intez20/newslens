@@ -9,6 +9,7 @@ class EnrichmentConfig:
     bootstrap_servers: str
     topics_input: tuple[str, ...]
     topic_failed: str
+    topic_output: str
     llm_backend: str
     ollama_base_url: str
     ollama_model: str
@@ -29,6 +30,9 @@ class EnrichmentConfig:
                 os.environ.get("KAFKA_TOPIC_WORLD", "world-news"),
             ),
             topic_failed=os.environ.get("KAFKA_TOPIC_FAILED", "news-failed"),
+            topic_output=os.environ.get(
+                "KAFKA_TOPIC_ENRICHED", "enriched-news"
+            ),
             llm_backend=os.environ.get("LLM_BACKEND", "ollama"),
             ollama_base_url=os.environ.get(
                 "OLLAMA_BASE_URL", "http://ollama:11434"

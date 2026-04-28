@@ -15,6 +15,7 @@ def _make_config() -> EnrichmentConfig:
         bootstrap_servers="localhost:29092",
         topics_input=("tech-news", "finance-news", "world-news"),
         topic_failed="news-failed",
+        topic_output="enriched-news",
         llm_backend="ollama",
         ollama_base_url="http://localhost:11434",
         ollama_model="mistral",

@@ -41,6 +41,10 @@ class EnrichmentWorker:
             bootstrap_servers=config.bootstrap_servers,
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
         )
+        self.output_producer = KafkaProducer(
+            bootstrap_servers=config.bootstrap_servers,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        )
 
     def run(self):
         """Main consumer loop — runs until interrupted."""
@@ -51,6 +55,9 @@ class EnrichmentWorker:
             for message in self.consumer:
                 try:
                     enriched = self.process_article(message.value)
+                    self.output_producer.send(
+                        self.config.topic_output, value=enriched
+                    )
                     logger.info(
                         "enriched %s | section=%s | sentiment=%s | tag=%s",
                         enriched["article_id"],
@@ -63,6 +70,7 @@ class EnrichmentWorker:
         finally:
             self.consumer.close()
             self.failed_producer.close()
+            self.output_producer.close()
 
     def process_article(self, raw: dict) -> dict:
         """Enrich a single article and return validated dict.
