@@ -58,6 +58,7 @@ class TestLLMFactory:
             "bootstrap_servers": "kafka:9092",
             "topics_input": ("tech-news",),
             "topic_failed": "news-failed",
+            "topic_output": "enriched-news",
             "llm_backend": "ollama",
             "ollama_base_url": "http://localhost:11434",
             "ollama_model": "mistral",
