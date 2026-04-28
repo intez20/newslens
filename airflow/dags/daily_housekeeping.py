@@ -4,8 +4,12 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from airflow.decorators import dag, task
+from airflow.lineage.entities import File
 
 logger = logging.getLogger(__name__)
+
+# OpenLineage dataset URIs
+WEAVIATE_DATASET = "weaviate://newslens/NewsArticle"
 
 DEFAULT_ARGS = {
     "owner": "newslens",
@@ -25,7 +29,10 @@ DEFAULT_ARGS = {
 )
 def daily_housekeeping():
 
-    @task()
+    @task(
+        inlets=[File(url=WEAVIATE_DATASET)],
+        outlets=[File(url=WEAVIATE_DATASET)],
+    )
     def prune_old_articles(**context):
         """Delete Weaviate articles where published_at < 30 days ago."""
         import os

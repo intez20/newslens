@@ -4,8 +4,14 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from airflow.decorators import dag, task
+from airflow.lineage.entities import File
 
 logger = logging.getLogger(__name__)
+
+# OpenLineage dataset URIs
+WEAVIATE_DATASET = "weaviate://newslens/NewsArticle"
+KAFKA_RAW = "kafka://newslens/raw-news"
+GUARDIAN_API = "https://content.guardianapis.com"
 
 DEFAULT_ARGS = {
     "owner": "newslens",
@@ -25,7 +31,9 @@ DEFAULT_ARGS = {
 )
 def backfill_missed():
 
-    @task()
+    @task(
+        inlets=[File(url=WEAVIATE_DATASET)],
+    )
     def check_guardian_gaps(**context):
         """Query Weaviate for date coverage in last 48h, identify gaps."""
         import os
@@ -81,7 +89,9 @@ def backfill_missed():
         finally:
             client.close()
 
-    @task()
+    @task(
+        inlets=[File(url=GUARDIAN_API)],
+    )
     def fetch_missing_articles(gaps: dict):
         """Call Guardian API for each missing date."""
         import os
@@ -127,7 +137,9 @@ def backfill_missed():
         logger.info("Fetched %d articles for backfill", len(all_articles))
         return {"fetched_articles": all_articles}
 
-    @task()
+    @task(
+        outlets=[File(url=KAFKA_RAW)],
+    )
     def publish_to_kafka(fetch_result: dict):
         """Publish re-fetched articles to raw-news topic."""
         import json

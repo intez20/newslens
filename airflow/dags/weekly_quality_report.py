@@ -4,8 +4,13 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from airflow.decorators import dag, task
+from airflow.lineage.entities import File
 
 logger = logging.getLogger(__name__)
+
+# OpenLineage dataset URIs
+WEAVIATE_DATASET = "weaviate://newslens/NewsArticle"
+KAFKA_FAILED = "kafka://newslens/news-failed"
 
 DEFAULT_ARGS = {
     "owner": "newslens",
@@ -25,7 +30,9 @@ DEFAULT_ARGS = {
 )
 def weekly_quality_report():
 
-    @task()
+    @task(
+        inlets=[File(url=WEAVIATE_DATASET)],
+    )
     def count_validated(**context):
         """Count articles in Weaviate from last 7 days."""
         import os
@@ -62,7 +69,9 @@ def weekly_quality_report():
         finally:
             client.close()
 
-    @task()
+    @task(
+        inlets=[File(url=KAFKA_FAILED)],
+    )
     def count_dead_letters(**context):
         """Count messages in news-failed topic from last 7 days."""
         import os

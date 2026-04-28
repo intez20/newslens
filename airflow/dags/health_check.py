@@ -4,8 +4,14 @@ import logging
 from datetime import datetime, timedelta
 
 from airflow.decorators import dag, task
+from airflow.lineage.entities import File
 
 logger = logging.getLogger(__name__)
+
+# OpenLineage dataset URIs
+KAFKA_BROKER = "kafka://newslens/broker"
+WEAVIATE_DATASET = "weaviate://newslens/NewsArticle"
+OLLAMA_SERVICE = "http://ollama:11434"
 
 DEFAULT_ARGS = {
     "owner": "newslens",
@@ -25,7 +31,9 @@ DEFAULT_ARGS = {
 )
 def health_check():
 
-    @task()
+    @task(
+        inlets=[File(url=KAFKA_BROKER)],
+    )
     def check_kafka(**context):
         """Verify Kafka broker responds."""
         import os
@@ -45,7 +53,9 @@ def health_check():
             logger.error("Kafka health check FAILED: %s", e)
             raise
 
-    @task()
+    @task(
+        inlets=[File(url=WEAVIATE_DATASET)],
+    )
     def check_weaviate(**context):
         """Verify Weaviate REST API is ready."""
         import os
@@ -61,7 +71,9 @@ def health_check():
             logger.error("Weaviate health check FAILED: %s", e)
             raise
 
-    @task()
+    @task(
+        inlets=[File(url=OLLAMA_SERVICE)],
+    )
     def check_ollama(**context):
         """Verify Ollama LLM server responds."""
         import os
