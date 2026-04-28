@@ -1,6 +1,7 @@
 # ===================================================================
 # NewsLens — Docker Compose
-# (KRaft Kafka + Kafka UI + Producer + Flink + Ollama + Enrichment)
+# (KRaft Kafka + Kafka UI + Producer + Flink + Ollama + Enrichment
+#  + Quality Gate)
 # ===================================================================
 # Usage:
 #   docker compose up -d             # start all services
@@ -65,6 +66,8 @@ services:
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic finance-news --partitions 1 --replication-factor 1 --config retention.ms=172800000
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic world-news --partitions 1 --replication-factor 1 --config retention.ms=172800000
         kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic news-failed --partitions 1 --replication-factor 1 --config retention.ms=604800000
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic enriched-news --partitions 1 --replication-factor 1 --config retention.ms=172800000
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic validated-news --partitions 1 --replication-factor 1 --config retention.ms=172800000
         echo ''
         echo '=== Topics created ==='
         kafka-topics --bootstrap-server kafka:9092 --list
@@ -171,6 +174,22 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+    restart: on-failure
+    networks:
+      - newslens-net
+
+  # ---------- Quality Gate (GX validation + embedding) ----------
+  quality-gate:
+    build:
+      context: ./quality_gate
+      dockerfile: Dockerfile
+    container_name: newslens-quality-gate
+    env_file: .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      enrichment-worker:
+        condition: service_started
     restart: on-failure
     networks:
       - newslens-net
