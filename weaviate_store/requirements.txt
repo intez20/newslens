@@ -1,0 +1,5 @@
+# Weaviate Ingestion Worker — Kafka consumer → Weaviate upsert
+weaviate-client>=4.6.0
+kafka-python==2.0.2
+pydantic==2.6.1
+python-dotenv==1.0.1

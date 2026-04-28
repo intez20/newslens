@@ -1,7 +1,7 @@
 # ===================================================================
 # NewsLens — Docker Compose
 # (KRaft Kafka + Kafka UI + Producer + Flink + Ollama + Enrichment
-#  + Quality Gate)
+#  + Quality Gate + Weaviate + Weaviate Ingestion)
 # ===================================================================
 # Usage:
 #   docker compose up -d             # start all services
@@ -194,6 +194,47 @@ services:
     networks:
       - newslens-net
 
+  # ---------- Weaviate — Vector Database (HNSW cosine, 384-dim) ----------
+  weaviate:
+    image: semitechnologies/weaviate:1.25.10
+    container_name: newslens-weaviate
+    hostname: weaviate
+    ports:
+      - "8085:8080"        # REST API (8085 to avoid kafka-ui conflict)
+      - "50051:50051"      # gRPC (used by Python v4 client)
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      DEFAULT_VECTORIZER_MODULE: "none"
+      CLUSTER_HOSTNAME: "node1"
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - newslens-net
+
+  # ---------- Weaviate Ingestion Worker (Kafka → Weaviate upsert) ----------
+  weaviate-ingestion:
+    build:
+      context: ./weaviate_store
+      dockerfile: Dockerfile
+    container_name: newslens-weaviate-ingestion
+    env_file: .env
+    depends_on:
+      kafka:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - newslens-net
+
 networks:
   newslens-net:
     driver: bridge
@@ -201,3 +242,4 @@ networks:
 
 volumes:
   ollama-data:
+  weaviate-data:
