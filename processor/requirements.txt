@@ -3,4 +3,4 @@
 # This file lists the Python dependencies bundled into the job JAR.
 apache-flink==1.18.1
 apache-flink-libraries==1.18.1
-pydantic==2.6.1
+pydantic==2.12.5

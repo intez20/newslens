@@ -1,6 +1,5 @@
 # Airflow — Orchestration, lineage, batch DAGs
-apache-airflow==2.8.4
-apache-airflow-providers-openlineage==1.7.0
-requests==2.31.0
-weaviate-client==4.5.4
-kafka-python==2.0.2
+# Note: apache-airflow is pre-installed in the base Docker image
+requests==2.32.3
+weaviate-client==4.21.0
+kafka-python==2.3.1
