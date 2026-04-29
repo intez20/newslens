@@ -16,7 +16,29 @@ DEFAULT_ARGS = {
     "owner": "newslens",
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
+    "on_failure_callback": lambda ctx: _discord_alert(ctx),
 }
+
+
+def _discord_alert(context):
+    """Send Discord webhook on task failure."""
+    import os
+    import requests as req
+
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
+    if not webhook_url:
+        return
+    task_id = context.get("task_instance", {}).task_id if context.get("task_instance") else "unknown"
+    dag_id = context.get("dag", {}).dag_id if context.get("dag") else "unknown"
+    msg = (
+        f"\U0001f6a8 **NewsLens DAG Failure**\n"
+        f"DAG: `{dag_id}` | Task: `{task_id}`\n"
+        f"Time: {datetime.now(timezone.utc).isoformat()}Z"
+    )
+    try:
+        req.post(webhook_url, json={"content": msg}, timeout=10)
+    except Exception:
+        logger.exception("Discord alert failed")
 
 
 @dag(
@@ -60,7 +82,7 @@ def weekly_quality_report():
         try:
             collection = client.collections.get(collection_name)
             result = collection.aggregate.over_all(
-                filters=Filter.by_property("published_at").greater_than(since.isoformat()),
+                filters=Filter.by_property("published_at").greater_than(since),
                 total_count=True,
             )
             count = result.total_count or 0
