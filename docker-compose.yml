@@ -1,7 +1,8 @@
 # ===================================================================
 # NewsLens — Docker Compose
 # (KRaft Kafka + Kafka UI + Producer + Flink + Ollama + Enrichment
-#  + Quality Gate + Weaviate + Weaviate Ingestion)
+#  + Quality Gate + Weaviate + Weaviate Ingestion
+#  + Airflow + Marquez)
 # ===================================================================
 # Usage:
 #   docker compose up -d             # start all services
@@ -196,7 +197,7 @@ services:
 
   # ---------- Weaviate — Vector Database (HNSW cosine, 384-dim) ----------
   weaviate:
-    image: semitechnologies/weaviate:1.25.10
+    image: semitechnologies/weaviate:1.28.0
     container_name: newslens-weaviate
     hostname: weaviate
     ports:
@@ -235,6 +236,97 @@ services:
     networks:
       - newslens-net
 
+  # ---------- Airflow — Orchestration (Webserver + Scheduler) ----------
+  airflow:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: newslens-airflow
+    ports:
+      - "8082:8080"           # Airflow Web UI
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      AIRFLOW__WEBSERVER__WEB_SERVER_PORT: "8080"
+      AIRFLOW__OPENLINEAGE__TRANSPORT: '{"type":"http","url":"http://marquez:5000"}'
+      AIRFLOW__OPENLINEAGE__NAMESPACE: newslens
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - airflow-logs:/opt/airflow/logs
+    depends_on:
+      kafka:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+      marquez:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@newslens.local || true &&
+        airflow webserver --port 8080 &
+        airflow scheduler
+    restart: on-failure
+    networks:
+      - newslens-net
+
+  # ---------- Marquez — OpenLineage Metadata Server ----------
+  marquez:
+    image: marquezproject/marquez:0.44.0
+    container_name: newslens-marquez
+    ports:
+      - "3000:3000"           # Marquez Web UI (lineage graph)
+      - "5000:5000"           # Marquez API (OpenLineage receiver)
+    environment:
+      MARQUEZ_PORT: 5000
+      MARQUEZ_ADMIN_PORT: 5001
+      POSTGRES_HOST: marquez-db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: marquez
+      POSTGRES_USER: marquez
+      POSTGRES_PASSWORD: marquez
+    depends_on:
+      marquez-db:
+        condition: service_healthy
+    restart: on-failure
+    networks:
+      - newslens-net
+
+  # ---------- Marquez DB — Postgres for Lineage Metadata ----------
+  marquez-db:
+    image: postgres:15
+    container_name: newslens-marquez-db
+    hostname: postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: marquez
+      POSTGRES_USER: marquez
+      POSTGRES_PASSWORD: marquez
+    volumes:
+      - marquez-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marquez"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: on-failure
+    networks:
+      newslens-net:
+        aliases:
+          - postgres
+
 networks:
   newslens-net:
     driver: bridge
@@ -243,3 +335,5 @@ networks:
 volumes:
   ollama-data:
   weaviate-data:
+  airflow-logs:
+  marquez-db-data:
