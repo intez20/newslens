@@ -8,7 +8,7 @@ from kafka import KafkaConsumer, KafkaProducer
 
 from enrichment.chains import EnrichmentChains
 from enrichment.config import EnrichmentConfig
-from enrichment.models import EnrichedArticleEvent
+from enrichment.models import EnrichedArticleEvent, VALID_DOMAIN_TAGS, VALID_SENTIMENTS
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +111,12 @@ class EnrichmentWorker:
             reason = ""
 
         domain_tag = str(result.get("domain_tag", "Other")).strip()
+        if domain_tag not in VALID_DOMAIN_TAGS:
+            logger.warning("LLM returned invalid domain_tag '%s', defaulting to 'Other'", domain_tag)
+            domain_tag = "Other"
+        if sentiment not in VALID_SENTIMENTS:
+            logger.warning("LLM returned invalid sentiment '%s', defaulting to 'Neutral'", sentiment)
+            sentiment = "Neutral"
 
         raw["summary"] = summary
         raw["entities"] = entities

@@ -98,7 +98,7 @@ def render(client: weaviate.WeaviateClient, config: DashboardConfig):
     st.caption("Check service UIs for deeper stats:")
     link_cols = st.columns(4)
     with link_cols[0]:
-        st.markdown("[\U0001f4e8 Kafka UI](http://localhost:8084)")
+        st.markdown("[\U0001f4e8 Kafka UI](http://localhost:8080)")
     with link_cols[1]:
         st.markdown("[\u2699\ufe0f Flink Dashboard](http://localhost:8081)")
     with link_cols[2]:
