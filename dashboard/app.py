@@ -49,8 +49,8 @@ def main():
             from dashboard.views.ask_newslens import render as render_ask
             render_ask(client, config)
         elif view_name == "metrics":
-            st.header("\U0001f4ca Pipeline Metrics")
-            st.info("Coming in Stage 9c — ingestion stats, sentiment charts, pass rates")
+            from dashboard.views.metrics import render as render_metrics
+            render_metrics(client, config)
     finally:
         client.close()
 
