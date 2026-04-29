@@ -1,8 +1,8 @@
 # Dashboard — Streamlit app (live feed, Q&A, metrics)
-streamlit==1.32.0
-langchain==0.2.16
-langchain-community==0.2.16
-langchain-core==0.2.38
-weaviate-client==4.5.4
-sentence-transformers==2.7.0
-python-dotenv==1.0.1
+streamlit==1.45.1
+langchain-community==0.4.1
+langchain-core==1.3.2
+weaviate-client==4.21.0
+sentence-transformers==5.4.1
+python-dotenv==1.2.2
+requests
