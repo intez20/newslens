@@ -286,7 +286,6 @@ services:
     image: marquezproject/marquez:0.44.0
     container_name: newslens-marquez
     ports:
-      - "3000:3000"           # Marquez Web UI (lineage graph)
       - "5000:5000"           # Marquez API (OpenLineage receiver)
     environment:
       MARQUEZ_PORT: 5000
@@ -299,6 +298,21 @@ services:
     depends_on:
       marquez-db:
         condition: service_healthy
+    restart: on-failure
+    networks:
+      - newslens-net
+
+  # ---------- Marquez Web UI — Lineage Visualization ----------
+  marquez-web:
+    image: marquezproject/marquez-web:0.44.0
+    container_name: newslens-marquez-web
+    ports:
+      - "3000:3000"
+    environment:
+      MARQUEZ_HOST: marquez
+      MARQUEZ_PORT: 5000
+    depends_on:
+      - marquez
     restart: on-failure
     networks:
       - newslens-net
