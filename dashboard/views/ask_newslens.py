@@ -31,8 +31,8 @@ def _build_rag_context(articles: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
-def _ask_ollama(question: str, context: str, config: DashboardConfig) -> str:
-    """Send a RAG prompt to Ollama and return the response."""
+def _ask_ollama(question: str, context: str, config: DashboardConfig):
+    """Send a RAG prompt to Ollama and yield streamed token chunks."""
     import requests
 
     prompt = (
@@ -50,17 +50,26 @@ def _ask_ollama(question: str, context: str, config: DashboardConfig) -> str:
             json={
                 "model": config.ollama_model,
                 "prompt": prompt,
-                "stream": False,
+                "stream": True,
                 "options": {"temperature": 0.2},
             },
             timeout=120,
+            stream=True,
         )
         resp.raise_for_status()
-        return resp.json().get("response", "No response from LLM.")
+        for line in resp.iter_lines():
+            if line:
+                import json
+                chunk = json.loads(line)
+                token = chunk.get("response", "")
+                if token:
+                    yield token
+                if chunk.get("done"):
+                    break
     except requests.exceptions.ConnectionError:
-        return "Could not connect to Ollama. Make sure the LLM service is running."
+        yield "Could not connect to Ollama. Make sure the LLM service is running."
     except Exception as e:
-        return f"LLM error: {e}"
+        yield f"LLM error: {e}"
 
 
 def render(client: weaviate.WeaviateClient, config: DashboardConfig):
@@ -120,6 +129,4 @@ def render(client: weaviate.WeaviateClient, config: DashboardConfig):
     if use_llm:
         st.subheader("\U0001f916 AI Answer")
         context = _build_rag_context(results)
-        with st.spinner("Generating answer with Ollama..."):
-            answer = _ask_ollama(question, context, config)
-        st.markdown(answer)
+        st.write_stream(_ask_ollama(question, context, config))

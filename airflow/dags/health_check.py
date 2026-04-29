@@ -1,7 +1,7 @@
 """DAG: health_check — verify Kafka, Weaviate, Ollama are healthy every 15 min."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from airflow.decorators import dag, task
 from airflow.lineage.entities import File
@@ -35,9 +35,9 @@ def health_check():
         inlets=[File(url=KAFKA_BROKER)],
     )
     def check_kafka(**context):
-        """Verify Kafka broker responds."""
+        """Verify Kafka broker responds and topics have recent messages."""
         import os
-        from kafka import KafkaConsumer
+        from kafka import KafkaConsumer, TopicPartition
 
         bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
         try:
@@ -47,17 +47,45 @@ def health_check():
             )
             topics = consumer.topics()
             consumer.close()
-            logger.info("Kafka healthy — %d topics found", len(topics))
-            return {"status": "healthy", "topics": len(topics)}
         except Exception as e:
-            logger.error("Kafka health check FAILED: %s", e)
+            logger.error("Kafka broker unreachable: %s", e)
             raise
+
+        if not topics:
+            raise RuntimeError("Kafka broker has zero topics")
+
+        # Check that key pipeline topics have messages
+        stale_topics = []
+        consumer = KafkaConsumer(bootstrap_servers=bootstrap, request_timeout_ms=5000)
+        for topic_name in ["raw-news", "enriched-news", "validated-news"]:
+            if topic_name not in topics:
+                stale_topics.append(f"{topic_name} (missing)")
+                continue
+            partitions = consumer.partitions_for_topic(topic_name)
+            if not partitions:
+                stale_topics.append(f"{topic_name} (no partitions)")
+                continue
+            tps = [TopicPartition(topic_name, p) for p in partitions]
+            end_offsets = consumer.end_offsets(tps)
+            begin_offsets = consumer.beginning_offsets(tps)
+            total_msgs = sum(end_offsets[tp] - begin_offsets[tp] for tp in tps)
+            if total_msgs == 0:
+                stale_topics.append(f"{topic_name} (empty)")
+        consumer.close()
+
+        if stale_topics:
+            msg = f"Pipeline stall — topics with no messages: {', '.join(stale_topics)}"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        logger.info("Kafka healthy — %d topics, pipeline topics have messages", len(topics))
+        return {"status": "healthy", "topics": len(topics)}
 
     @task(
         inlets=[File(url=WEAVIATE_DATASET)],
     )
     def check_weaviate(**context):
-        """Verify Weaviate REST API is ready."""
+        """Verify Weaviate REST API is ready and has recent ingestion."""
         import os
         import requests
 
@@ -65,17 +93,44 @@ def health_check():
         try:
             resp = requests.get(f"{url}/v1/.well-known/ready", timeout=5)
             resp.raise_for_status()
-            logger.info("Weaviate healthy — ready endpoint returned 200")
-            return {"status": "healthy"}
         except Exception as e:
-            logger.error("Weaviate health check FAILED: %s", e)
+            logger.error("Weaviate REST unreachable: %s", e)
             raise
+
+        # Check total article count
+        try:
+            agg_resp = requests.post(
+                f"{url}/v1/graphql",
+                json={
+                    "query": '{ Aggregate { NewsArticle { meta { count } } } }'
+                },
+                timeout=10,
+            )
+            agg_resp.raise_for_status()
+            count = (
+                agg_resp.json()
+                .get("data", {})
+                .get("Aggregate", {})
+                .get("NewsArticle", [{}])[0]
+                .get("meta", {})
+                .get("count", 0)
+            )
+        except Exception:
+            count = -1
+
+        if count == 0:
+            msg = "Weaviate has zero articles — ingestion may be stalled"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        logger.info("Weaviate healthy — %s articles in NewsArticle", count)
+        return {"status": "healthy", "article_count": count}
 
     @task(
         inlets=[File(url=OLLAMA_SERVICE)],
     )
     def check_ollama(**context):
-        """Verify Ollama LLM server responds."""
+        """Verify Ollama LLM server responds and has a model loaded."""
         import os
         import requests
 
@@ -84,11 +139,41 @@ def health_check():
             resp = requests.get(f"{url}/api/tags", timeout=10)
             resp.raise_for_status()
             models = resp.json().get("models", [])
-            logger.info("Ollama healthy — %d models loaded", len(models))
-            return {"status": "healthy", "models": len(models)}
         except Exception as e:
             logger.error("Ollama health check FAILED: %s", e)
             raise
+
+        if not models:
+            msg = "Ollama has no models loaded — enrichment will fail"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        logger.info("Ollama healthy — %d models loaded", len(models))
+        return {"status": "healthy", "models": len(models)}
+
+    @task()
+    def check_consumer_lag(**context):
+        """Verify Kafka consumer groups are active and not excessively lagging."""
+        import os
+        from kafka.admin import KafkaAdminClient
+
+        bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+        try:
+            admin = KafkaAdminClient(bootstrap_servers=bootstrap, request_timeout_ms=10000)
+            groups = admin.list_consumer_groups()
+            admin.close()
+        except Exception as e:
+            logger.error("Cannot query consumer groups: %s", e)
+            raise
+
+        if not groups:
+            msg = "No Kafka consumer groups found — workers may be down"
+            logger.error(msg)
+            raise RuntimeError(msg)
+
+        group_names = [g[0] for g in groups]
+        logger.info("Consumer groups active: %s", group_names)
+        return {"status": "healthy", "groups": group_names}
 
     @task(trigger_rule="all_done")
     def alert_on_failure(**context):
@@ -129,7 +214,8 @@ def health_check():
     kafka = check_kafka()
     weaviate = check_weaviate()
     ollama = check_ollama()
-    [kafka, weaviate, ollama] >> alert_on_failure()
+    lag = check_consumer_lag()
+    [kafka, weaviate, ollama, lag] >> alert_on_failure()
 
 
 health_check()

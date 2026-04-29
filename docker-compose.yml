@@ -77,7 +77,7 @@ services:
 
   # ---------- Kafka UI (topic inspector on localhost:8080) ----------
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: ghcr.io/kafbat/kafka-ui:latest
     container_name: newslens-kafka-ui
     ports:
       - "8080:8080"
