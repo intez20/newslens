@@ -46,8 +46,8 @@ def main():
             from dashboard.views.live_feed import render
             render(client, config)
         elif view_name == "ask_newslens":
-            st.header("\U0001f50d Ask NewsLens")
-            st.info("Coming in Stage 9b — semantic search + RAG Q&A")
+            from dashboard.views.ask_newslens import render as render_ask
+            render_ask(client, config)
         elif view_name == "metrics":
             st.header("\U0001f4ca Pipeline Metrics")
             st.info("Coming in Stage 9c — ingestion stats, sentiment charts, pass rates")
